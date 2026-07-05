@@ -104,6 +104,30 @@
     border-color: var(--gold);
     font-weight: 700;
   }
+  .chip[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  .custom-list-input {
+    width: 100%;
+    resize: vertical;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(245, 236, 217, 0.18);
+    border-radius: 12px;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 0.9rem;
+    padding: 0.7rem 0.8rem;
+    line-height: 1.5;
+  }
+  .custom-list-input::placeholder { color: rgba(201, 184, 160, 0.6); }
+  .custom-list-input:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+  .custom-list-actions { display: flex; gap: 0.6rem; margin-top: 0.6rem; }
+  .file-label { text-align: center; }
+  .save-list-btn { flex: none; padding: 0.6rem 1.1rem; }
+
+  #customListStatus { margin-top: 0.5rem; text-align: left; min-height: 1em; }
+  #customListStatus.error { color: var(--danger); }
+  #customListStatus.ok { color: var(--success); }
 
   .segmented { display: flex; gap: 0.5rem; }
   .seg-btn {
@@ -311,6 +335,16 @@
         <div class="chip-grid" id="categoryChips"></div>
       </div>
       <div>
+        <p class="section-label">Bring your own list</p>
+        <textarea id="customListInput" class="custom-list-input" rows="4" placeholder="One word or phrase per line…"></textarea>
+        <div class="custom-list-actions">
+          <label class="chip file-label" for="customFileInput">Upload .txt</label>
+          <input type="file" id="customFileInput" accept=".txt,text/plain" hidden />
+          <button type="button" id="saveCustomListBtn" class="seg-btn save-list-btn">Save List</button>
+        </div>
+        <p class="hint" id="customListStatus"></p>
+      </div>
+      <div>
         <p class="section-label">Round length</p>
         <div class="segmented" id="durationSeg">
           <button type="button" class="seg-btn" data-seconds="30">30s</button>
@@ -387,6 +421,10 @@
   };
   WORD_BANKS["Random Mix"] = Object.keys(WORD_BANKS).reduce(function (acc, k) { return acc.concat(WORD_BANKS[k]); }, []);
 
+  var CUSTOM_KEY = "My List";
+  var CUSTOM_STORAGE_KEY = "charadesCustomList";
+  WORD_BANKS[CUSTOM_KEY] = [];
+
   var TILT_THRESHOLD = 40;
   var COOLDOWN_MS = 900;
 
@@ -396,6 +434,10 @@
     game: document.getElementById("screen-game"),
     results: document.getElementById("screen-results"),
     categoryChips: document.getElementById("categoryChips"),
+    customListInput: document.getElementById("customListInput"),
+    customFileInput: document.getElementById("customFileInput"),
+    saveCustomListBtn: document.getElementById("saveCustomListBtn"),
+    customListStatus: document.getElementById("customListStatus"),
     durationSeg: document.getElementById("durationSeg"),
     startBtn: document.getElementById("startBtn"),
     enableMotionBtn: document.getElementById("enableMotionBtn"),
@@ -446,19 +488,100 @@
   }
 
   // ---------- Setup screen ----------
+  var chipEls = {};
+
+  function selectCategory(name) {
+    state.category = name;
+    Object.keys(chipEls).forEach(function (k) {
+      chipEls[k].setAttribute("aria-pressed", k === name ? "true" : "false");
+    });
+  }
+
+  function chipLabel(name) {
+    return name === CUSTOM_KEY && WORD_BANKS[CUSTOM_KEY].length
+      ? CUSTOM_KEY + " (" + WORD_BANKS[CUSTOM_KEY].length + ")"
+      : name;
+  }
+
+  function refreshCustomChip() {
+    var btn = chipEls[CUSTOM_KEY];
+    var count = WORD_BANKS[CUSTOM_KEY].length;
+    btn.textContent = chipLabel(CUSTOM_KEY);
+    if (count >= 2) {
+      btn.removeAttribute("disabled");
+    } else {
+      btn.setAttribute("disabled", "true");
+      if (state.category === CUSTOM_KEY) selectCategory(Object.keys(WORD_BANKS)[0]);
+    }
+  }
+
   Object.keys(WORD_BANKS).forEach(function (name, i) {
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "chip";
-    btn.textContent = name;
+    btn.textContent = chipLabel(name);
     btn.setAttribute("aria-pressed", i === 0 ? "true" : "false");
     btn.addEventListener("click", function () {
-      state.category = name;
-      Array.prototype.forEach.call(els.categoryChips.children, function (c) {
-        c.setAttribute("aria-pressed", c === btn ? "true" : "false");
-      });
+      if (btn.hasAttribute("disabled")) {
+        els.customListStatus.textContent = "Add at least two items below, then tap Save List.";
+        els.customListStatus.className = "hint error";
+        return;
+      }
+      selectCategory(name);
     });
+    chipEls[name] = btn;
     els.categoryChips.appendChild(btn);
+  });
+  refreshCustomChip();
+
+  function parseListText(text) {
+    return text.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+
+  function saveCustomList(text) {
+    var items = parseListText(text);
+    if (items.length < 2) {
+      els.customListStatus.textContent = "Add at least two items (one per line) before saving.";
+      els.customListStatus.className = "hint error";
+      return;
+    }
+    WORD_BANKS[CUSTOM_KEY] = items;
+    try { localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(items)); } catch (e) { /* storage unavailable */ }
+    refreshCustomChip();
+    selectCategory(CUSTOM_KEY);
+    els.customListStatus.textContent = "Saved " + items.length + " items — “" + CUSTOM_KEY + "” selected.";
+    els.customListStatus.className = "hint ok";
+  }
+
+  (function loadStoredCustomList() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(CUSTOM_STORAGE_KEY) || "[]");
+      if (Array.isArray(saved) && saved.length) {
+        WORD_BANKS[CUSTOM_KEY] = saved;
+        els.customListInput.value = saved.join("\n");
+        refreshCustomChip();
+      }
+    } catch (e) { /* storage unavailable */ }
+  })();
+
+  els.saveCustomListBtn.addEventListener("click", function () {
+    saveCustomList(els.customListInput.value);
+  });
+
+  els.customFileInput.addEventListener("change", function () {
+    var file = els.customFileInput.files && els.customFileInput.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      els.customListInput.value = String(reader.result || "");
+      saveCustomList(els.customListInput.value);
+    };
+    reader.onerror = function () {
+      els.customListStatus.textContent = "Couldn't read that file — try pasting the list instead.";
+      els.customListStatus.className = "hint error";
+    };
+    reader.readAsText(file);
+    els.customFileInput.value = "";
   });
 
   Array.prototype.forEach.call(els.durationSeg.children, function (btn) {
