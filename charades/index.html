@@ -1,0 +1,635 @@
+<title>Charades — Tilt to Play</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="theme-color" content="#120d0b" />
+<style>
+  :root {
+    --bg: #120d0b;
+    --bg-spot: radial-gradient(ellipse 120% 70% at 50% -10%, #3a2015 0%, #1a1210 45%, #120d0b 80%);
+    --curtain: #7a1626;
+    --curtain-deep: #52101a;
+    --gold: #d1a13c;
+    --gold-soft: rgba(209, 161, 60, 0.35);
+    --ink: #f5ecd9;
+    --ink-muted: #c9b8a0;
+    --success: #4caf7d;
+    --success-soft: rgba(76, 175, 125, 0.16);
+    --danger: #d9483c;
+    --danger-soft: rgba(217, 72, 60, 0.16);
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    background-image: var(--bg-spot);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #app {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: max(1.25rem, env(safe-area-inset-top)) 1.25rem max(1.25rem, env(safe-area-inset-bottom));
+  }
+
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  /* ---------- Setup screen ---------- */
+  .marquee { text-align: center; margin: 1.5rem 0 2rem; }
+  .marquee h1 {
+    font-family: var(--serif);
+    font-style: italic;
+    font-weight: 700;
+    font-size: clamp(2.6rem, 12vw, 3.6rem);
+    margin: 0;
+    letter-spacing: 0.01em;
+    color: var(--gold);
+    text-shadow: 0 0 24px var(--gold-soft), 0 2px 0 var(--curtain-deep);
+  }
+  .marquee .tagline {
+    margin: 0.4rem 0 0;
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+  }
+
+  .setup-card {
+    background: linear-gradient(180deg, rgba(122, 22, 38, 0.28), rgba(122, 22, 38, 0.08));
+    border: 1px solid rgba(209, 161, 60, 0.25);
+    border-radius: 20px;
+    padding: 1.5rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .section-label {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 1.15rem;
+    color: var(--ink);
+    margin: 0 0 0.75rem;
+  }
+
+  .chip-grid { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .chip {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    color: var(--ink-muted);
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(245, 236, 217, 0.18);
+    border-radius: 999px;
+    padding: 0.55rem 1rem;
+    cursor: pointer;
+  }
+  .chip:focus-visible, .cta:focus-visible, .control-btn:focus-visible, .seg-btn:focus-visible, button:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+  .chip[aria-pressed="true"] {
+    color: var(--bg);
+    background: var(--gold);
+    border-color: var(--gold);
+    font-weight: 700;
+  }
+
+  .segmented { display: flex; gap: 0.5rem; }
+  .seg-btn {
+    flex: 1;
+    padding: 0.6rem 0;
+    border-radius: 12px;
+    border: 1px solid rgba(245, 236, 217, 0.18);
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--ink-muted);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .seg-btn[aria-pressed="true"] {
+    background: var(--curtain);
+    border-color: var(--gold);
+    color: var(--ink);
+  }
+
+  .cta {
+    margin-top: auto;
+    background: var(--gold);
+    color: #1a1210;
+    border: none;
+    border-radius: 14px;
+    padding: 1rem;
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(209, 161, 60, 0.25);
+  }
+  .cta:active { transform: translateY(1px); }
+
+  .howto {
+    color: var(--ink-muted);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    text-align: center;
+    margin: 0;
+  }
+
+  /* ---------- Permission screen ---------- */
+  #screen-permission { align-items: center; justify-content: center; text-align: center; gap: 1rem; }
+  #screen-permission h2 { font-family: var(--serif); font-style: italic; color: var(--gold); font-size: 1.6rem; margin: 0; }
+  #screen-permission p { color: var(--ink-muted); max-width: 30ch; margin: 0; }
+
+  /* ---------- Game screen ---------- */
+  #screen-game { gap: 1.25rem; }
+  .topbar { display: flex; align-items: center; gap: 0.75rem; }
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.1rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    min-width: 3.2rem;
+    justify-content: center;
+  }
+  .badge-correct { background: var(--success-soft); color: var(--success); }
+  .badge-pass { background: var(--danger-soft); color: var(--danger); }
+  .badge svg { width: 14px; height: 14px; }
+
+  .timer { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+  #timeDisplay { font-weight: 800; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+  .timer-track { width: 100%; height: 6px; border-radius: 999px; background: rgba(245, 236, 217, 0.12); overflow: hidden; }
+  .timer-fill { height: 100%; width: 100%; background: var(--gold); transition: width 1s linear; }
+
+  .stage-card {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 1rem;
+    background: radial-gradient(ellipse 90% 70% at 50% 40%, rgba(209, 161, 60, 0.14), transparent 70%),
+                linear-gradient(180deg, rgba(122, 22, 38, 0.3), rgba(82, 16, 26, 0.2));
+    border: 1px solid rgba(209, 161, 60, 0.3);
+    border-radius: 24px;
+    padding: 1.5rem;
+  }
+  .category-label {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--ink-muted);
+    font-size: 1rem;
+    margin: 0;
+    letter-spacing: 0.02em;
+  }
+  .word {
+    font-family: var(--sans);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    font-size: clamp(2.1rem, 11vw, 3.6rem);
+    line-height: 1.05;
+    margin: 0;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+
+  .hint {
+    color: var(--ink-muted);
+    font-size: 0.78rem;
+    text-align: center;
+    margin: 0;
+    letter-spacing: 0.01em;
+  }
+
+  .manual-controls { display: flex; gap: 0.85rem; }
+  .control-btn {
+    flex: 1;
+    padding: 1rem;
+    border-radius: 16px;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: 0.02em;
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .control-btn.pass { background: var(--danger-soft); color: var(--danger); border-color: rgba(217, 72, 60, 0.4); }
+  .control-btn.correct { background: var(--success-soft); color: var(--success); border-color: rgba(76, 175, 125, 0.4); }
+  .control-btn:active { transform: translateY(1px); }
+  .control-btn svg { width: 18px; height: 18px; }
+
+  /* ---------- Results screen ---------- */
+  #screen-results { align-items: stretch; gap: 1rem; }
+  #screen-results h2 {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--gold);
+    text-align: center;
+    font-size: 2rem;
+    margin: 1rem 0 0;
+  }
+  .final-score {
+    text-align: center;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-muted);
+    margin: 0 0 0.5rem;
+  }
+  .final-score b { color: var(--ink); font-size: 1.2rem; }
+  .playbill-heading {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--ink-muted);
+    margin: 0;
+    font-size: 1.05rem;
+  }
+  .playbill-list {
+    margin: 0;
+    padding: 0 0 0 1.3rem;
+    flex: 1;
+    overflow-y: auto;
+    color: var(--ink);
+    line-height: 1.9;
+  }
+  .playbill-list:empty::after {
+    content: "No words guessed — give it another go.";
+    color: var(--ink-muted);
+    font-style: italic;
+    display: block;
+    padding-left: -1.3rem;
+    margin-left: -1.3rem;
+  }
+
+  /* ---------- Flash overlay ---------- */
+  #flashOverlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    background: var(--success);
+    transition: opacity 0.35s ease;
+    z-index: 50;
+  }
+  #flashOverlay.show { opacity: 0.35; transition: opacity 0.05s ease; }
+  #flashOverlay.danger { background: var(--danger); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .timer-fill, #flashOverlay { transition: none; }
+  }
+</style>
+
+<div id="app">
+  <div id="flashOverlay"></div>
+
+  <section id="screen-setup" class="screen active">
+    <header class="marquee">
+      <h1>Charades</h1>
+      <p class="tagline">Tilt to play — right on your phone</p>
+    </header>
+    <div class="setup-card">
+      <div>
+        <p class="section-label">Choose a category</p>
+        <div class="chip-grid" id="categoryChips"></div>
+      </div>
+      <div>
+        <p class="section-label">Round length</p>
+        <div class="segmented" id="durationSeg">
+          <button type="button" class="seg-btn" data-seconds="30">30s</button>
+          <button type="button" class="seg-btn" data-seconds="60" aria-pressed="true">60s</button>
+          <button type="button" class="seg-btn" data-seconds="90">90s</button>
+        </div>
+      </div>
+      <button id="startBtn" class="cta" type="button">Begin Performance</button>
+      <p class="howto">Hold the phone flat to your forehead, screen facing out. Tilt the top down for correct, tilt it up to pass. The buttons on screen work the same way if tilting doesn't suit you.</p>
+    </div>
+  </section>
+
+  <section id="screen-permission" class="screen">
+    <h2>Enable Motion</h2>
+    <p>This phone needs permission to read its motion sensor before tilting can control the game.</p>
+    <button id="enableMotionBtn" class="cta" type="button" style="margin-top:0;">Enable Motion</button>
+    <button id="skipMotionBtn" class="chip" type="button" style="background:transparent;">Skip — I'll use the buttons</button>
+  </section>
+
+  <section id="screen-game" class="screen">
+    <div class="topbar">
+      <div class="badge badge-correct">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 10l4 4 8-8"/></svg>
+        <span id="correctCount">0</span>
+      </div>
+      <div class="timer">
+        <span id="timeDisplay">60</span>
+        <div class="timer-track"><div class="timer-fill" id="timerFill"></div></div>
+      </div>
+      <div class="badge badge-pass">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+        <span id="passCount">0</span>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <p class="category-label" id="activeCategoryLabel">Category</p>
+      <h2 class="word" id="wordDisplay">WORD</h2>
+    </div>
+
+    <p class="hint" id="motionHint">Tilt down = correct · Tilt up = pass</p>
+
+    <div class="manual-controls">
+      <button class="control-btn pass" id="passBtn" type="button">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+        Pass
+      </button>
+      <button class="control-btn correct" id="correctBtn" type="button">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 10l4 4 8-8"/></svg>
+        Correct
+      </button>
+    </div>
+  </section>
+
+  <section id="screen-results" class="screen">
+    <h2>Curtain Call</h2>
+    <p class="final-score"><b id="finalCorrect">0</b> correct &nbsp;·&nbsp; <b id="finalPassed">0</b> passed</p>
+    <p class="playbill-heading">Words you got</p>
+    <ol class="playbill-list" id="correctList"></ol>
+    <button id="playAgainBtn" class="cta" type="button">Play Again</button>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var WORD_BANKS = {
+    "Movies & Shows": ["Titanic", "Jurassic Park", "The Matrix", "Frozen", "Friends", "Breaking Bad", "Star Wars", "The Office", "Harry Potter", "Jaws", "Toy Story", "Stranger Things", "The Lion King", "Shrek", "Game of Thrones", "Rocky", "The Simpsons", "Finding Nemo"],
+    "Animals": ["Kangaroo", "Octopus", "Penguin", "Elephant", "Flamingo", "Gorilla", "Cheetah", "Dolphin", "Peacock", "Sloth", "Crocodile", "Owl", "Camel", "Koala", "Jellyfish", "Rhino", "Bat", "Squirrel"],
+    "Actions": ["Sneezing", "Surfing", "Juggling", "Sleepwalking", "Fishing", "Skydiving", "Painting", "Typing", "Yawning", "Boxing", "Ice Skating", "Swimming", "Dancing", "Sculpting", "Vacuuming", "Whistling", "Snoring", "Hiccuping"],
+    "Famous People": ["Albert Einstein", "Beyoncé", "Charlie Chaplin", "Cleopatra", "Elvis Presley", "Michael Jackson", "Napoleon", "Sherlock Holmes", "Batman", "Superman", "Mona Lisa", "Santa Claus", "William Shakespeare", "Abraham Lincoln", "Marilyn Monroe", "Frankenstein", "Dracula", "James Bond"],
+    "Everyday Objects": ["Toaster", "Umbrella", "Toothbrush", "Backpack", "Sunglasses", "Pillow", "Camera", "Guitar", "Bicycle", "Ladder", "Balloon", "Candle", "Telescope", "Wheelchair", "Trampoline", "Blender", "Skateboard", "Fire Extinguisher"]
+  };
+  WORD_BANKS["Random Mix"] = Object.keys(WORD_BANKS).reduce(function (acc, k) { return acc.concat(WORD_BANKS[k]); }, []);
+
+  var TILT_THRESHOLD = 40;
+  var COOLDOWN_MS = 900;
+
+  var els = {
+    setup: document.getElementById("screen-setup"),
+    permission: document.getElementById("screen-permission"),
+    game: document.getElementById("screen-game"),
+    results: document.getElementById("screen-results"),
+    categoryChips: document.getElementById("categoryChips"),
+    durationSeg: document.getElementById("durationSeg"),
+    startBtn: document.getElementById("startBtn"),
+    enableMotionBtn: document.getElementById("enableMotionBtn"),
+    skipMotionBtn: document.getElementById("skipMotionBtn"),
+    correctCount: document.getElementById("correctCount"),
+    passCount: document.getElementById("passCount"),
+    timeDisplay: document.getElementById("timeDisplay"),
+    timerFill: document.getElementById("timerFill"),
+    activeCategoryLabel: document.getElementById("activeCategoryLabel"),
+    wordDisplay: document.getElementById("wordDisplay"),
+    passBtn: document.getElementById("passBtn"),
+    correctBtn: document.getElementById("correctBtn"),
+    motionHint: document.getElementById("motionHint"),
+    finalCorrect: document.getElementById("finalCorrect"),
+    finalPassed: document.getElementById("finalPassed"),
+    correctList: document.getElementById("correctList"),
+    playAgainBtn: document.getElementById("playAgainBtn"),
+    flashOverlay: document.getElementById("flashOverlay")
+  };
+
+  var state = {
+    category: "Movies & Shows",
+    duration: 60,
+    deck: [],
+    deckIndex: 0,
+    lastWord: null,
+    correctWords: [],
+    passCount: 0,
+    remaining: 60,
+    timerId: null,
+    gameActive: false
+  };
+
+  var motion = { baseline: null, locked: false, listening: false };
+
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function showScreen(name) {
+    [els.setup, els.permission, els.game, els.results].forEach(function (s) { s.classList.remove("active"); });
+    els[name].classList.add("active");
+  }
+
+  // ---------- Setup screen ----------
+  Object.keys(WORD_BANKS).forEach(function (name, i) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip";
+    btn.textContent = name;
+    btn.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+    btn.addEventListener("click", function () {
+      state.category = name;
+      Array.prototype.forEach.call(els.categoryChips.children, function (c) {
+        c.setAttribute("aria-pressed", c === btn ? "true" : "false");
+      });
+    });
+    els.categoryChips.appendChild(btn);
+  });
+
+  Array.prototype.forEach.call(els.durationSeg.children, function (btn) {
+    btn.addEventListener("click", function () {
+      state.duration = parseInt(btn.dataset.seconds, 10);
+      Array.prototype.forEach.call(els.durationSeg.children, function (b) {
+        b.setAttribute("aria-pressed", b === btn ? "true" : "false");
+      });
+    });
+  });
+
+  els.startBtn.addEventListener("click", function () {
+    buildDeck();
+    var needsPermission = typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
+    if (needsPermission) {
+      showScreen("permission");
+    } else {
+      if (window.DeviceOrientationEvent && !motion.listening) {
+        window.addEventListener("deviceorientation", handleOrientation);
+        motion.listening = true;
+      }
+      startGame();
+    }
+  });
+
+  els.enableMotionBtn.addEventListener("click", function () {
+    DeviceMotionEvent.requestPermission().then(function (result) {
+      if (result === "granted" && !motion.listening) {
+        window.addEventListener("deviceorientation", handleOrientation);
+        motion.listening = true;
+      } else if (result !== "granted") {
+        els.motionHint.textContent = "Motion access denied — use the buttons below";
+      }
+      startGame();
+    }).catch(function () {
+      els.motionHint.textContent = "Motion unavailable — use the buttons below";
+      startGame();
+    });
+  });
+
+  els.skipMotionBtn.addEventListener("click", function () {
+    els.motionHint.textContent = "Using buttons — tilt controls off";
+    startGame();
+  });
+
+  // ---------- Deck ----------
+  function buildDeck() {
+    state.deck = shuffle(WORD_BANKS[state.category]);
+    state.deckIndex = 0;
+    state.lastWord = null;
+  }
+
+  function nextWord() {
+    if (state.deckIndex >= state.deck.length) {
+      var reshuffled = shuffle(WORD_BANKS[state.category]);
+      if (reshuffled[0] === state.lastWord && reshuffled.length > 1) {
+        var t = reshuffled[0]; reshuffled[0] = reshuffled[1]; reshuffled[1] = t;
+      }
+      state.deck = reshuffled;
+      state.deckIndex = 0;
+    }
+    var word = state.deck[state.deckIndex++];
+    state.lastWord = word;
+    els.wordDisplay.textContent = word;
+  }
+
+  // ---------- Game flow ----------
+  function startGame() {
+    state.correctWords = [];
+    state.passCount = 0;
+    state.remaining = state.duration;
+    state.gameActive = true;
+    motion.baseline = null;
+    motion.locked = false;
+
+    els.correctCount.textContent = "0";
+    els.passCount.textContent = "0";
+    els.activeCategoryLabel.textContent = state.category;
+    els.timeDisplay.textContent = String(state.remaining);
+    els.timerFill.style.width = "100%";
+    if (els.motionHint.textContent.indexOf("denied") === -1 && els.motionHint.textContent.indexOf("Using buttons") === -1) {
+      els.motionHint.textContent = "Tilt down = correct · Tilt up = pass";
+    }
+
+    nextWord();
+    showScreen("game");
+
+    state.timerId = setInterval(function () {
+      state.remaining--;
+      els.timeDisplay.textContent = String(Math.max(state.remaining, 0));
+      els.timerFill.style.width = Math.max((state.remaining / state.duration) * 100, 0) + "%";
+      if (state.remaining <= 0) endGame();
+    }, 1000);
+  }
+
+  function endGame() {
+    state.gameActive = false;
+    clearInterval(state.timerId);
+    els.finalCorrect.textContent = String(state.correctWords.length);
+    els.finalPassed.textContent = String(state.passCount);
+    els.correctList.innerHTML = "";
+    state.correctWords.forEach(function (w) {
+      var li = document.createElement("li");
+      li.textContent = w;
+      els.correctList.appendChild(li);
+    });
+    showScreen("results");
+  }
+
+  function flash(kind) {
+    els.flashOverlay.classList.toggle("danger", kind === "pass");
+    els.flashOverlay.classList.add("show");
+    setTimeout(function () { els.flashOverlay.classList.remove("show"); }, 220);
+  }
+
+  function markCorrect() {
+    if (!state.gameActive) return;
+    state.correctWords.push(els.wordDisplay.textContent);
+    els.correctCount.textContent = String(state.correctWords.length);
+    flash("correct");
+    if (navigator.vibrate) navigator.vibrate(60);
+    nextWord();
+  }
+
+  function markPass() {
+    if (!state.gameActive) return;
+    state.passCount++;
+    els.passCount.textContent = String(state.passCount);
+    flash("pass");
+    if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
+    nextWord();
+  }
+
+  function triggerAction(kind) {
+    motion.locked = true;
+    if (kind === "correct") markCorrect(); else markPass();
+    setTimeout(function () { motion.baseline = null; motion.locked = false; }, COOLDOWN_MS);
+  }
+
+  els.correctBtn.addEventListener("click", function () { triggerAction("correct"); });
+  els.passBtn.addEventListener("click", function () { triggerAction("pass"); });
+
+  // ---------- Tilt detection ----------
+  function getTiltValue(e) {
+    var angle = (screen.orientation && typeof screen.orientation.angle === "number") ? screen.orientation.angle : (window.orientation || 0);
+    var beta = e.beta || 0;
+    var gamma = e.gamma || 0;
+    switch (angle) {
+      case 90: return -gamma;
+      case -90:
+      case 270: return gamma;
+      case 180: return -beta;
+      default: return beta;
+    }
+  }
+
+  function handleOrientation(e) {
+    if (!state.gameActive || motion.locked) return;
+    if (e.beta === null && e.gamma === null) return;
+    var tilt = getTiltValue(e);
+    if (motion.baseline === null) { motion.baseline = tilt; return; }
+    var diff = tilt - motion.baseline;
+    if (diff >= TILT_THRESHOLD) {
+      triggerAction("correct");
+    } else if (diff <= -TILT_THRESHOLD) {
+      triggerAction("pass");
+    }
+  }
+
+  els.playAgainBtn.addEventListener("click", function () {
+    showScreen("setup");
+  });
+})();
+</script>
