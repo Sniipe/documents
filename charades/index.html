@@ -129,6 +129,8 @@
   #customListStatus.error { color: var(--danger); }
   #customListStatus.ok { color: var(--success); }
 
+  .debug-readout { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.72rem; opacity: 0.7; }
+
   .segmented { display: flex; gap: 0.5rem; }
   .seg-btn {
     flex: 1;
@@ -386,6 +388,7 @@
     </div>
 
     <p class="hint" id="motionHint">Tilt down = correct · Tilt up = pass</p>
+    <p class="hint debug-readout" id="debugReadout">Waiting for motion data…</p>
 
     <div class="manual-controls">
       <button class="control-btn pass" id="passBtn" type="button">
@@ -451,6 +454,7 @@
     passBtn: document.getElementById("passBtn"),
     correctBtn: document.getElementById("correctBtn"),
     motionHint: document.getElementById("motionHint"),
+    debugReadout: document.getElementById("debugReadout"),
     finalCorrect: document.getElementById("finalCorrect"),
     finalPassed: document.getElementById("finalPassed"),
     correctList: document.getElementById("correctList"),
@@ -471,7 +475,7 @@
     gameActive: false
   };
 
-  var motion = { baseline: null, locked: false, listening: false };
+  var motion = { baseline: null, locked: false, listening: false, gotEvent: false };
 
   function shuffle(arr) {
     var a = arr.slice();
@@ -656,6 +660,14 @@
     state.gameActive = true;
     motion.baseline = null;
     motion.locked = false;
+    motion.gotEvent = false;
+
+    els.debugReadout.textContent = motion.listening ? "Waiting for motion data…" : "Motion listener not attached — using buttons only";
+    setTimeout(function () {
+      if (state.gameActive && motion.listening && !motion.gotEvent) {
+        els.debugReadout.textContent = "No motion data received. In Chrome, tap the lock/info icon by the address bar → Permissions → Motion sensors → Allow, then reload.";
+      }
+    }, 2500);
 
     els.correctCount.textContent = "0";
     els.passCount.textContent = "0";
@@ -739,11 +751,14 @@
   }
 
   function handleOrientation(e) {
-    if (!state.gameActive || motion.locked) return;
     if (e.beta === null && e.gamma === null) return;
+    motion.gotEvent = true;
     var tilt = getTiltValue(e);
-    if (motion.baseline === null) { motion.baseline = tilt; return; }
+
+    if (!state.gameActive || motion.locked) return;
+    if (motion.baseline === null) { motion.baseline = tilt; }
     var diff = tilt - motion.baseline;
+    els.debugReadout.textContent = "β " + e.beta.toFixed(0) + "° γ " + e.gamma.toFixed(0) + "° · tilt " + tilt.toFixed(0) + "° · Δ " + diff.toFixed(0) + "°";
     if (diff >= TILT_THRESHOLD) {
       triggerAction("correct");
     } else if (diff <= -TILT_THRESHOLD) {
