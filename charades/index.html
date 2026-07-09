@@ -49,7 +49,7 @@
     font-family: var(--serif);
     font-style: italic;
     font-weight: 700;
-    font-size: clamp(2.6rem, 12vw, 3.6rem);
+    font-size: clamp(2.6rem, 12vmin, 3.6rem);
     margin: 0;
     letter-spacing: 0.01em;
     color: var(--gold);
@@ -177,8 +177,22 @@
   #screen-permission h2 { font-family: var(--serif); font-style: italic; color: var(--gold); font-size: 1.6rem; margin: 0; }
   #screen-permission p { color: var(--ink-muted); max-width: 30ch; margin: 0; }
 
+  /* ---------- Countdown screen ---------- */
+  #screen-countdown { align-items: center; justify-content: center; text-align: center; gap: 0.75rem; position: relative; }
+  #screen-countdown .category-label { margin: 0; }
+  #countdownNumber {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: clamp(4rem, 32vmin, 9rem);
+    line-height: 1;
+    color: var(--gold);
+    text-shadow: 0 0 32px var(--gold-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  #screen-countdown .howto { max-width: 32ch; }
+
   /* ---------- Game screen ---------- */
-  #screen-game { gap: 1.25rem; }
+  #screen-game { gap: 1.25rem; position: relative; }
   .topbar { display: flex; align-items: center; gap: 0.75rem; }
   .badge {
     display: flex;
@@ -228,7 +242,7 @@
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: -0.01em;
-    font-size: clamp(2.1rem, 11vw, 3.6rem);
+    font-size: clamp(2.1rem, 12vmin, 3.8rem);
     line-height: 1.05;
     margin: 0;
     text-wrap: balance;
@@ -241,6 +255,12 @@
     text-align: center;
     margin: 0;
     letter-spacing: 0.01em;
+  }
+
+  #timeDisplay.time-critical { color: var(--danger); animation: pulse-critical 1s ease-in-out infinite; }
+  @keyframes pulse-critical {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.18); }
   }
 
   .manual-controls { display: flex; gap: 0.85rem; }
@@ -318,8 +338,58 @@
   #flashOverlay.show { opacity: 0.35; transition: opacity 0.05s ease; }
   #flashOverlay.danger { background: var(--danger); }
 
+  /* ---------- Rotate-to-landscape prompt ---------- */
+  .rotate-prompt {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: var(--bg);
+    background-image: var(--bg-spot);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 2rem;
+    text-align: center;
+  }
+  .rotate-prompt .rotate-icon {
+    width: 3rem;
+    height: 3rem;
+    border: 3px solid var(--gold);
+    border-radius: 8px;
+    animation: rotate-hint 1.8s ease-in-out infinite;
+  }
+  @keyframes rotate-hint {
+    0%, 15% { transform: rotate(0deg); }
+    50%, 65% { transform: rotate(90deg); }
+    100% { transform: rotate(90deg); }
+  }
+  .rotate-prompt p {
+    font-family: var(--serif);
+    font-style: italic;
+    color: var(--gold);
+    font-size: 1.3rem;
+    max-width: 24ch;
+    margin: 0;
+  }
+  @media (orientation: portrait) {
+    body.in-round .rotate-prompt { display: flex; }
+  }
+
+  /* ---------- Compact landscape layout for countdown/game ---------- */
+  @media (orientation: landscape) and (max-height: 520px) {
+    #app { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+    #screen-game { gap: 0.6rem; }
+    .stage-card { padding: 0.75rem; gap: 0.4rem; }
+    .manual-controls { gap: 0.5rem; }
+    .control-btn { padding: 0.65rem; }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .timer-fill, #flashOverlay { transition: none; }
+    .rotate-prompt .rotate-icon { animation: none; }
+    #timeDisplay.time-critical { animation: none; }
   }
 </style>
 
@@ -366,6 +436,13 @@
     <button id="skipMotionBtn" class="chip" type="button" style="background:transparent;">Skip — I'll use the buttons</button>
   </section>
 
+  <section id="screen-countdown" class="screen">
+    <p class="category-label" id="countdownCategory">Category</p>
+    <p id="countdownNumber">5</p>
+    <p class="howto">Get the phone against your forehead, screen facing out.</p>
+    <div class="rotate-prompt"><div class="rotate-icon"></div><p>Turn your phone sideways to play</p></div>
+  </section>
+
   <section id="screen-game" class="screen">
     <div class="topbar">
       <div class="badge badge-correct">
@@ -400,6 +477,7 @@
         Correct
       </button>
     </div>
+    <div class="rotate-prompt"><div class="rotate-icon"></div><p>Turn your phone sideways to play</p></div>
   </section>
 
   <section id="screen-results" class="screen">
@@ -434,8 +512,11 @@
   var els = {
     setup: document.getElementById("screen-setup"),
     permission: document.getElementById("screen-permission"),
+    countdown: document.getElementById("screen-countdown"),
     game: document.getElementById("screen-game"),
     results: document.getElementById("screen-results"),
+    countdownCategory: document.getElementById("countdownCategory"),
+    countdownNumber: document.getElementById("countdownNumber"),
     categoryChips: document.getElementById("categoryChips"),
     customListInput: document.getElementById("customListInput"),
     customFileInput: document.getElementById("customFileInput"),
@@ -487,8 +568,58 @@
   }
 
   function showScreen(name) {
-    [els.setup, els.permission, els.game, els.results].forEach(function (s) { s.classList.remove("active"); });
+    [els.setup, els.permission, els.countdown, els.game, els.results].forEach(function (s) { s.classList.remove("active"); });
     els[name].classList.add("active");
+  }
+
+  // ---------- Sound engine (no assets — synthesized tones) ----------
+  var audioCtx = null;
+  function getAudioCtx() {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    if (!audioCtx) audioCtx = new Ctx();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  function tone(freq, startTime, duration, gainPeak, waveType) {
+    var ctx = getAudioCtx();
+    if (!ctx) return;
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.type = waveType || "sine";
+    osc.frequency.value = freq;
+    var t0 = ctx.currentTime + startTime;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(gainPeak, t0 + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.03);
+  }
+
+  function playDing() {
+    tone(1046.5, 0, 0.28, 0.22);
+    tone(1568, 0.03, 0.22, 0.12);
+  }
+
+  function playDong() {
+    tone(220, 0, 0.42, 0.22);
+    tone(164.81, 0.02, 0.42, 0.12);
+  }
+
+  function playCountdownBeep() {
+    tone(880, 0, 0.12, 0.18);
+  }
+
+  function playGoTone() {
+    tone(660, 0, 0.09, 0.2);
+    tone(990, 0.09, 0.18, 0.22);
+  }
+
+  function playBuzzer() {
+    tone(196, 0, 0.55, 0.22, "sawtooth");
   }
 
   // ---------- Setup screen ----------
@@ -597,8 +728,24 @@
     });
   });
 
+  function tryLockLandscape() {
+    var el = document.documentElement;
+    var req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req) {
+      try {
+        var p = req.call(el);
+        if (p && p.catch) p.catch(function () {});
+      } catch (e) { /* fullscreen unavailable */ }
+    }
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock("landscape").catch(function () {});
+    }
+  }
+
   els.startBtn.addEventListener("click", function () {
     buildDeck();
+    getAudioCtx();
+    tryLockLandscape();
     var needsPermission = typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function";
     if (needsPermission) {
       showScreen("permission");
@@ -607,7 +754,7 @@
         window.addEventListener("deviceorientation", handleOrientation);
         motion.listening = true;
       }
-      startGame();
+      startCountdown();
     }
   });
 
@@ -619,17 +766,38 @@
       } else if (result !== "granted") {
         els.motionHint.textContent = "Motion access denied — use the buttons below";
       }
-      startGame();
+      startCountdown();
     }).catch(function () {
       els.motionHint.textContent = "Motion unavailable — use the buttons below";
-      startGame();
+      startCountdown();
     });
   });
 
   els.skipMotionBtn.addEventListener("click", function () {
     els.motionHint.textContent = "Using buttons — tilt controls off";
-    startGame();
+    startCountdown();
   });
+
+  // ---------- Pre-round countdown ----------
+  function startCountdown() {
+    document.body.classList.add("in-round");
+    els.countdownCategory.textContent = state.category;
+    showScreen("countdown");
+    var n = 5;
+    els.countdownNumber.textContent = String(n);
+    playCountdownBeep();
+    var countdownId = setInterval(function () {
+      n--;
+      if (n > 0) {
+        els.countdownNumber.textContent = String(n);
+        playCountdownBeep();
+      } else {
+        clearInterval(countdownId);
+        playGoTone();
+        startGame();
+      }
+    }, 1000);
+  }
 
   // ---------- Deck ----------
   function buildDeck() {
@@ -673,6 +841,7 @@
     els.passCount.textContent = "0";
     els.activeCategoryLabel.textContent = state.category;
     els.timeDisplay.textContent = String(state.remaining);
+    els.timeDisplay.classList.remove("time-critical");
     els.timerFill.style.width = "100%";
     if (els.motionHint.textContent.indexOf("denied") === -1 && els.motionHint.textContent.indexOf("Using buttons") === -1) {
       els.motionHint.textContent = "Tilt down = correct · Tilt up = pass";
@@ -685,12 +854,20 @@
       state.remaining--;
       els.timeDisplay.textContent = String(Math.max(state.remaining, 0));
       els.timerFill.style.width = Math.max((state.remaining / state.duration) * 100, 0) + "%";
-      if (state.remaining <= 0) endGame();
+      if (state.remaining <= 5 && state.remaining > 0) {
+        els.timeDisplay.classList.add("time-critical");
+        playCountdownBeep();
+      }
+      if (state.remaining <= 0) {
+        playBuzzer();
+        endGame();
+      }
     }, 1000);
   }
 
   function endGame() {
     state.gameActive = false;
+    document.body.classList.remove("in-round");
     clearInterval(state.timerId);
     els.finalCorrect.textContent = String(state.correctWords.length);
     els.finalPassed.textContent = String(state.passCount);
@@ -714,6 +891,7 @@
     state.correctWords.push(els.wordDisplay.textContent);
     els.correctCount.textContent = String(state.correctWords.length);
     flash("correct");
+    playDing();
     if (navigator.vibrate) navigator.vibrate(60);
     nextWord();
   }
@@ -723,6 +901,7 @@
     state.passCount++;
     els.passCount.textContent = String(state.passCount);
     flash("pass");
+    playDong();
     if (navigator.vibrate) navigator.vibrate([40, 40, 40]);
     nextWord();
   }
