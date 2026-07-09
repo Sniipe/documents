@@ -750,8 +750,8 @@
     if (needsPermission) {
       showScreen("permission");
     } else {
-      if (window.DeviceOrientationEvent && !motion.listening) {
-        window.addEventListener("deviceorientation", handleOrientation);
+      if (window.DeviceMotionEvent && !motion.listening) {
+        window.addEventListener("devicemotion", handleMotion);
         motion.listening = true;
       }
       startCountdown();
@@ -761,7 +761,7 @@
   els.enableMotionBtn.addEventListener("click", function () {
     DeviceMotionEvent.requestPermission().then(function (result) {
       if (result === "granted" && !motion.listening) {
-        window.addEventListener("deviceorientation", handleOrientation);
+        window.addEventListener("devicemotion", handleMotion);
         motion.listening = true;
       } else if (result !== "granted") {
         els.motionHint.textContent = "Motion access denied — use the buttons below";
@@ -916,22 +916,29 @@
   els.passBtn.addEventListener("click", function () { triggerAction("pass"); });
 
   // ---------- Tilt detection ----------
+  // beta/gamma (deviceorientation) are Euler angles that gimbal-lock right
+  // around the "phone held upright" pose — exactly how it's held against a
+  // forehead — so gamma pins at +/-90 instead of tracking the nod. Reading
+  // the raw accelerometer vector (devicemotion) and taking the angle of
+  // gravity in the device's X-Z plane avoids that singularity entirely:
+  // nodding the phone (rotating about its horizontal screen axis) swings
+  // gravity smoothly between x and z with no lock point.
   function getTiltValue(e) {
-    // gamma is the device's Y-axis rotation (-90..90) — the phone's
-    // physical nod axis when held in landscape, independent of whether
-    // the OS has actually rotated the page (rotation lock can prevent that).
-    return e.gamma || 0;
+    var x = e.x || 0;
+    var z = e.z || 0;
+    return Math.atan2(x, z) * (180 / Math.PI);
   }
 
-  function handleOrientation(e) {
-    if (e.beta === null && e.gamma === null) return;
+  function handleMotion(e) {
+    var g = e.accelerationIncludingGravity;
+    if (!g || (g.x === null && g.y === null && g.z === null)) return;
     motion.gotEvent = true;
-    var tilt = getTiltValue(e);
+    var tilt = getTiltValue(g);
 
     if (!state.gameActive || motion.locked) return;
     if (motion.baseline === null) { motion.baseline = tilt; }
     var diff = tilt - motion.baseline;
-    els.debugReadout.textContent = "β " + e.beta.toFixed(0) + "° γ " + e.gamma.toFixed(0) + "° · tilt " + tilt.toFixed(0) + "° · Δ " + diff.toFixed(0) + "°";
+    els.debugReadout.textContent = "x " + (g.x || 0).toFixed(1) + " y " + (g.y || 0).toFixed(1) + " z " + (g.z || 0).toFixed(1) + " · tilt " + tilt.toFixed(0) + "° · Δ " + diff.toFixed(0) + "°";
     if (diff >= TILT_THRESHOLD) {
       triggerAction("correct");
     } else if (diff <= -TILT_THRESHOLD) {
