@@ -129,6 +129,26 @@
   #customListStatus.error { color: var(--danger); }
   #customListStatus.ok { color: var(--success); }
 
+  #noDecksHint { margin: 0.6rem 0 0; font-style: italic; }
+
+  .custom-chip-group { display: inline-flex; align-items: center; gap: 0.3rem; }
+  .chip-delete {
+    width: 1.7rem;
+    height: 1.7rem;
+    flex: none;
+    border-radius: 50%;
+    border: 1px solid rgba(245, 236, 217, 0.18);
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--ink-muted);
+    font-size: 0.95rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+
   .debug-readout { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.72rem; opacity: 0.7; }
 
   .segmented { display: flex; gap: 0.5rem; }
@@ -405,14 +425,17 @@
       <div>
         <p class="section-label">Choose a category</p>
         <div class="chip-grid" id="categoryChips"></div>
+        <div class="chip-grid" id="customDeckChips" style="margin-top: 0.6rem;"></div>
+        <p class="hint" id="noDecksHint">No decks of your own yet — create one below.</p>
       </div>
       <div>
-        <p class="section-label">Bring your own list</p>
-        <textarea id="customListInput" class="custom-list-input" rows="4" placeholder="One word or phrase per line…"></textarea>
+        <p class="section-label">Create a deck</p>
+        <input type="text" id="customDeckNameInput" class="custom-list-input" placeholder="Deck name, e.g. “Office Party”" />
+        <textarea id="customListInput" class="custom-list-input" rows="4" placeholder="One word or phrase per line…" style="margin-top: 0.6rem;"></textarea>
         <div class="custom-list-actions">
           <label class="chip file-label" for="customFileInput">Upload .txt</label>
           <input type="file" id="customFileInput" accept=".txt,text/plain" hidden />
-          <button type="button" id="saveCustomListBtn" class="seg-btn save-list-btn">Save List</button>
+          <button type="button" id="saveCustomListBtn" class="seg-btn save-list-btn">Save Deck</button>
         </div>
         <p class="hint" id="customListStatus"></p>
       </div>
@@ -501,10 +524,11 @@
     "Everyday Objects": ["Toaster", "Umbrella", "Toothbrush", "Backpack", "Sunglasses", "Pillow", "Camera", "Guitar", "Bicycle", "Ladder", "Balloon", "Candle", "Telescope", "Wheelchair", "Trampoline", "Blender", "Skateboard", "Fire Extinguisher"]
   };
   WORD_BANKS["Random Mix"] = Object.keys(WORD_BANKS).reduce(function (acc, k) { return acc.concat(WORD_BANKS[k]); }, []);
+  var BUILTIN_NAMES = Object.keys(WORD_BANKS);
 
-  var CUSTOM_KEY = "My List";
-  var CUSTOM_STORAGE_KEY = "charadesCustomList";
-  WORD_BANKS[CUSTOM_KEY] = [];
+  var DECKS_STORAGE_KEY = "charadesCustomDecks";
+  var LEGACY_LIST_STORAGE_KEY = "charadesCustomList";
+  var customDecks = []; // [{ name, words }]
 
   var TILT_THRESHOLD = 45;
   var COOLDOWN_MS = 1000;
@@ -518,6 +542,9 @@
     countdownCategory: document.getElementById("countdownCategory"),
     countdownNumber: document.getElementById("countdownNumber"),
     categoryChips: document.getElementById("categoryChips"),
+    customDeckChips: document.getElementById("customDeckChips"),
+    noDecksHint: document.getElementById("noDecksHint"),
+    customDeckNameInput: document.getElementById("customDeckNameInput"),
     customListInput: document.getElementById("customListInput"),
     customFileInput: document.getElementById("customFileInput"),
     saveCustomListBtn: document.getElementById("saveCustomListBtn"),
@@ -635,76 +662,138 @@
     });
   }
 
-  function chipLabel(name) {
-    return name === CUSTOM_KEY && WORD_BANKS[CUSTOM_KEY].length
-      ? CUSTOM_KEY + " (" + WORD_BANKS[CUSTOM_KEY].length + ")"
-      : name;
-  }
-
-  function refreshCustomChip() {
-    var btn = chipEls[CUSTOM_KEY];
-    var count = WORD_BANKS[CUSTOM_KEY].length;
-    btn.textContent = chipLabel(CUSTOM_KEY);
-    if (count >= 2) {
-      btn.removeAttribute("disabled");
-    } else {
-      btn.setAttribute("disabled", "true");
-      if (state.category === CUSTOM_KEY) selectCategory(Object.keys(WORD_BANKS)[0]);
-    }
-  }
-
-  Object.keys(WORD_BANKS).forEach(function (name, i) {
+  BUILTIN_NAMES.forEach(function (name, i) {
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "chip";
-    btn.textContent = chipLabel(name);
+    btn.textContent = name;
     btn.setAttribute("aria-pressed", i === 0 ? "true" : "false");
-    btn.addEventListener("click", function () {
-      if (btn.hasAttribute("disabled")) {
-        els.customListStatus.textContent = "Add at least two items below, then tap Save List.";
-        els.customListStatus.className = "hint error";
-        return;
-      }
-      selectCategory(name);
-    });
+    btn.addEventListener("click", function () { selectCategory(name); });
     chipEls[name] = btn;
     els.categoryChips.appendChild(btn);
   });
-  refreshCustomChip();
+
+  function setStatus(message, kind) {
+    els.customListStatus.textContent = message;
+    els.customListStatus.className = "hint" + (kind ? " " + kind : "");
+  }
 
   function parseListText(text) {
     return text.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
   }
 
-  function saveCustomList(text) {
-    var items = parseListText(text);
-    if (items.length < 2) {
-      els.customListStatus.textContent = "Add at least two items (one per line) before saving.";
-      els.customListStatus.className = "hint error";
-      return;
-    }
-    WORD_BANKS[CUSTOM_KEY] = items;
-    try { localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(items)); } catch (e) { /* storage unavailable */ }
-    refreshCustomChip();
-    selectCategory(CUSTOM_KEY);
-    els.customListStatus.textContent = "Saved " + items.length + " items — “" + CUSTOM_KEY + "” selected.";
-    els.customListStatus.className = "hint ok";
+  function persistDecks() {
+    try { localStorage.setItem(DECKS_STORAGE_KEY, JSON.stringify(customDecks)); } catch (e) { /* storage unavailable */ }
   }
 
-  (function loadStoredCustomList() {
+  function findDeckIndex(name) {
+    var lower = name.toLowerCase();
+    for (var i = 0; i < customDecks.length; i++) {
+      if (customDecks[i].name.toLowerCase() === lower) return i;
+    }
+    return -1;
+  }
+
+  function renderCustomDeckChips() {
+    els.customDeckChips.innerHTML = "";
+    els.noDecksHint.style.display = customDecks.length ? "none" : "block";
+    customDecks.forEach(function (deck) {
+      var group = document.createElement("span");
+      group.className = "custom-chip-group";
+
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip";
+      btn.textContent = deck.name + " (" + deck.words.length + ")";
+      btn.setAttribute("aria-pressed", state.category === deck.name ? "true" : "false");
+      btn.addEventListener("click", function () { selectCategory(deck.name); });
+      chipEls[deck.name] = btn;
+
+      var del = document.createElement("button");
+      del.type = "button";
+      del.className = "chip-delete";
+      del.setAttribute("aria-label", "Delete deck " + deck.name);
+      del.textContent = "×";
+      del.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        deleteDeck(deck.name);
+      });
+
+      group.appendChild(btn);
+      group.appendChild(del);
+      els.customDeckChips.appendChild(group);
+    });
+  }
+
+  function deleteDeck(name) {
+    var idx = findDeckIndex(name);
+    if (idx === -1) return;
+    customDecks.splice(idx, 1);
+    delete chipEls[name];
+    delete WORD_BANKS[name];
+    persistDecks();
+    renderCustomDeckChips();
+    if (state.category === name) selectCategory(BUILTIN_NAMES[0]);
+    setStatus("Deleted “" + name + ".”", "");
+  }
+
+  function saveDeck() {
+    var name = els.customDeckNameInput.value.trim();
+    var items = parseListText(els.customListInput.value);
+    if (!name) {
+      setStatus("Give the deck a name.", "error");
+      return;
+    }
+    if (BUILTIN_NAMES.indexOf(name) !== -1) {
+      setStatus("“" + name + "” is already a built-in category — pick another name.", "error");
+      return;
+    }
+    if (items.length < 2) {
+      setStatus("Add at least two items (one per line) before saving.", "error");
+      return;
+    }
+    var idx = findDeckIndex(name);
+    if (idx === -1) {
+      customDecks.push({ name: name, words: items });
+    } else {
+      customDecks[idx].name = name;
+      customDecks[idx].words = items;
+    }
+    WORD_BANKS[name] = items;
+    persistDecks();
+    renderCustomDeckChips();
+    selectCategory(name);
+    setStatus("Saved “" + name + "” (" + items.length + " items) — selected.", "ok");
+    els.customDeckNameInput.value = "";
+    els.customListInput.value = "";
+  }
+
+  (function loadStoredDecks() {
     try {
-      var saved = JSON.parse(localStorage.getItem(CUSTOM_STORAGE_KEY) || "[]");
-      if (Array.isArray(saved) && saved.length) {
-        WORD_BANKS[CUSTOM_KEY] = saved;
-        els.customListInput.value = saved.join("\n");
-        refreshCustomChip();
+      var saved = JSON.parse(localStorage.getItem(DECKS_STORAGE_KEY) || "[]");
+      if (Array.isArray(saved)) {
+        customDecks = saved.filter(function (d) { return d && typeof d.name === "string" && Array.isArray(d.words) && d.words.length; });
+        customDecks.forEach(function (d) { WORD_BANKS[d.name] = d.words; });
       }
     } catch (e) { /* storage unavailable */ }
+
+    // One-time migration from the old single-list format.
+    if (!customDecks.length) {
+      try {
+        var legacy = JSON.parse(localStorage.getItem(LEGACY_LIST_STORAGE_KEY) || "[]");
+        if (Array.isArray(legacy) && legacy.length) {
+          customDecks.push({ name: "My List", words: legacy });
+          WORD_BANKS["My List"] = legacy;
+          persistDecks();
+          localStorage.removeItem(LEGACY_LIST_STORAGE_KEY);
+        }
+      } catch (e) { /* storage unavailable */ }
+    }
+
+    renderCustomDeckChips();
   })();
 
-  els.saveCustomListBtn.addEventListener("click", function () {
-    saveCustomList(els.customListInput.value);
-  });
+  els.saveCustomListBtn.addEventListener("click", saveDeck);
 
   els.customFileInput.addEventListener("change", function () {
     var file = els.customFileInput.files && els.customFileInput.files[0];
@@ -712,11 +801,14 @@
     var reader = new FileReader();
     reader.onload = function () {
       els.customListInput.value = String(reader.result || "");
-      saveCustomList(els.customListInput.value);
+      if (!els.customDeckNameInput.value.trim()) {
+        var guess = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+        if (guess) els.customDeckNameInput.value = guess;
+      }
+      setStatus("Loaded “" + file.name + "” — check the name, then tap Save Deck.", "ok");
     };
     reader.onerror = function () {
-      els.customListStatus.textContent = "Couldn't read that file — try pasting the list instead.";
-      els.customListStatus.className = "hint error";
+      setStatus("Couldn't read that file — try pasting the list instead.", "error");
     };
     reader.readAsText(file);
     els.customFileInput.value = "";
