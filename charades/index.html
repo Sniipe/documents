@@ -917,16 +917,10 @@
 
   // ---------- Tilt detection ----------
   function getTiltValue(e) {
-    var angle = (screen.orientation && typeof screen.orientation.angle === "number") ? screen.orientation.angle : (window.orientation || 0);
-    var beta = e.beta || 0;
-    var gamma = e.gamma || 0;
-    switch (angle) {
-      case 90: return -gamma;
-      case -90:
-      case 270: return gamma;
-      case 180: return -beta;
-      default: return beta;
-    }
+    // gamma is the device's Y-axis rotation (-90..90) — the phone's
+    // physical nod axis when held in landscape, independent of whether
+    // the OS has actually rotated the page (rotation lock can prevent that).
+    return e.gamma || 0;
   }
 
   function handleOrientation(e) {
