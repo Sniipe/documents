@@ -605,8 +605,11 @@
   }
 
   function playDong() {
-    tone(220, 0, 0.42, 0.22);
-    tone(164.81, 0.02, 0.42, 0.12);
+    // An octave below playDing's pitch but still well within a phone
+    // speaker's usable range — true low tones (~165-220Hz) barely
+    // reproduce on small speakers and end up inaudible.
+    tone(523.25, 0, 0.4, 0.3);
+    tone(392, 0.03, 0.34, 0.18);
   }
 
   function playCountdownBeep() {
